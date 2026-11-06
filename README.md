@@ -70,15 +70,42 @@
 - **2026-09**: 新增网络层重试/退避：`requests.Session` 挂载 `HTTPAdapter` + `urllib3.Retry`（total=3、指数退避 1/2/4s、对 429/5xx 自动重试），降低 CI 网络抖动导致的误报失败；业务 200 响应不受影响。
 
 
+## 2026-11 签到修复与配置
+
+- 默认使用 Linux User-Agent；状态、积分、签到及兑换请求保持一致。设备不匹配时停止，不再切换平台重试。上述 2026-09 自适应重试说明已被本次修复替代。
+- 默认只访问 `glados.cloud`，不再把同一个 Cookie 发往两个域名。
+- 签到前后查询积分，使用十进制精度记录余额变化；接口返回成功但无法确认积分增长时，标记为未确认并让 Actions 失败，不自动重试。余额变化是核对依据，其他同时发生的积分操作可能影响它；应在网页复核异常。
+- 修复汇总丢失签到返回积分的问题；缺少积分字段显示“未知”，不伪报为 0。日志区分接口积分与余额变化。
+- 无效会话停止后续操作；签到失败或到账未确认时跳过兑换，余额不足也不调用兑换。
+- 每天北京时间 09:18 触发一次定时任务，默认随机等待 0～1800 秒再签到。GitHub 排队可能使实际执行更晚；随机延迟不保证签到被接受。手动运行和 push 触发不等待。
+
+在仓库 `Settings → Secrets and variables → Actions → Variables` 中可配置以下 **Repository variables**。已有 Cookie 和推送密钥仍保留在 Secrets，绝不要放进 Variables。
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `GLADOS_USER_AGENT` | Linux 浏览器 UA | 可填入你登录时浏览器请求的完整 `User-Agent`，不要填 Cookie；未配置即可按 Linux 使用 |
+| `GLADOS_DOMAIN` | `glados.cloud` | 仅支持 `glados.cloud` 或 `railgun.info`；Cookie 必须属于所选站点 |
+| `GLADOS_MAX_DELAY_SECONDS` | `1800` | 定时任务最大随机延迟秒数，允许 `0`～`1800`；设为 `0` 关闭随机延迟 |
+
+同一次运行的多个 Cookie 必须属于所选域名并使用同一 UA 配置；不同域名或不同登录客户端应分别配置运行环境，不要混用凭据。以上默认值按 Linux 登录会话配置，并不保证平台允许自动签到。
+
+离线回归测试（不会读取真实凭据或访问签到接口）：
+
+```sh
+python -m pip install requests pypushdeer
+python -m unittest discover -s tests -v
+```
+
 ## 问题排查与定位
 - 大家可以通过查询 actions 中的 running checkin 日志快速定位问题，有其他问题提交issue。
-- 若日志出现 `code : 4, message : Automated check-in detected`：这是 GLaDOS 的**设备平台校验**（`reason=device-mismatch`，即签到请求 UA 平台与登录设备平台不一致）。脚本已内置**设备平台自适应**：首次失败时自动读取服务端返回的 `loginDevice` 并切换对应平台 UA 重试，**无需手动配置 User-Agent**；若长期仍失败，请重新登录 glados.cloud 手动签到一次并刷新 cookie。
+- 若出现 `Automated check-in detected` 且 `reason=device-mismatch`：核对 Cookie 所属站点和登录浏览器的 User-Agent。脚本会停止，不切换平台重试。UA 一致也不能保证通过其他服务端检查；持续拒绝时先核实平台允许的签到方式。
 
   <img width="1684" height="844" alt="image" src="https://github.com/user-attachments/assets/45348a5f-43e4-45f5-8fdf-ce84d343b30d" />
 
 ## 声明
 
 本项目不保证稳定运行与更新, 因GitHub相关规定可能会删库, 请注意备份
+
 
 
 
