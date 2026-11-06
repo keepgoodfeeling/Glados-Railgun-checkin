@@ -8,13 +8,17 @@ on:
       - 'README.md'
       - 'imgs/**'
   schedule:
-    - cron: '18 9,12 * * *'
+    - cron: '18 9 * * *'
       timezone: 'Asia/Shanghai'
 
 jobs:
   build:
     name: glados/railgun checkin
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: glados-checkin-${{ github.ref }}
+      cancel-in-progress: false
       
     permissions:
       contents: read
@@ -37,6 +41,12 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Random delay for scheduled checkin
+      if: github.event_name == 'schedule'
+      run: python random_delay.py
+      env:
+        GLADOS_MAX_DELAY_SECONDS: ${{ vars.GLADOS_MAX_DELAY_SECONDS }}
+
     # 安装 python 库
     - name: Install dependencies
       run: |
@@ -53,6 +63,8 @@ jobs:
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
         GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
+        GLADOS_USER_AGENT: ${{ vars.GLADOS_USER_AGENT }}
+        GLADOS_DOMAIN: ${{ vars.GLADOS_DOMAIN }}
 
     - name: Keep alive
       uses: liskin/gh-workflow-keepalive@v1 
@@ -65,3 +77,4 @@ jobs:
         retain_days: 7
         keep_minimum_runs: 7
         delete_run_by_conclusion_pattern: success
+
